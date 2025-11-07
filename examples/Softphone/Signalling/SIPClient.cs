@@ -44,8 +44,6 @@ namespace SIPSorcery.SoftPhone
         private SIPServerUserAgent m_pendingIncomingCall;
         private CancellationTokenSource _cts = new CancellationTokenSource();
 
-        private int m_audioOutDeviceIndex = SIPSoftPhoneState.AudioOutDeviceIndex;
-
         public event Action<SIPClient> CallAnswer;                 // Fires when an outgoing SIP call is answered.
         public event Action<SIPClient> CallEnded;                  // Fires when an incoming or outgoing call is over.
         public event Action<SIPClient, string> StatusMessage;      // Fires when the SIP client has a status message it wants to inform the UI about.
@@ -294,8 +292,18 @@ namespace SIPSorcery.SoftPhone
         /// <returns>A new media session object.</returns>
         private VoIPMediaSession CreateMediaSession()
         {
-            var windowsAudioEndPoint = new WindowsAudioEndPoint(new AudioEncoder(), m_audioOutDeviceIndex);
-            var windowsVideoEndPoint = new WindowsVideoEndPoint(new VpxVideoEncoder());
+            int audioInDeviceIndex = SIPSoftPhoneState.AudioInDeviceIndex;
+            int audioOutDeviceIndex = SIPSoftPhoneState.AudioOutDeviceIndex;
+
+            WindowsAudioEndPoint windowsAudioEndPoint = (audioInDeviceIndex >= 0 || audioOutDeviceIndex >= 0)
+                ? new WindowsAudioEndPoint(new AudioEncoder(), audioInDeviceIndex, audioOutDeviceIndex)
+                : new WindowsAudioEndPoint(new AudioEncoder());
+
+            string videoDeviceName = SIPSoftPhoneState.VideoDeviceName;
+            WindowsVideoEndPoint windowsVideoEndPoint = !string.IsNullOrWhiteSpace(videoDeviceName)
+                ? new WindowsVideoEndPoint(new VpxVideoEncoder(), videoDeviceName)
+                : new WindowsVideoEndPoint(new VpxVideoEncoder());
+            windowsVideoEndPoint.ConfigureVirtualBackground(SIPSoftPhoneState.GetVirtualBackgroundOptions());
 
             MediaEndPoints mediaEndPoints = new MediaEndPoints
             {

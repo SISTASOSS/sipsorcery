@@ -51,6 +51,7 @@ namespace SIPSorcery.SoftPhone
         private WriteableBitmap _client0WriteableBitmap;
         private WriteableBitmap _client1WriteableBitmap;
 #pragma warning restore CS0649
+        private SettingsWindow _settingsWindow;
         //private AudioScope.AudioScope _audioScope0;
         //private AudioScope.AudioScopeOpenGL _audioScopeGL0;
         //private AudioScope.AudioScope _audioScope1;
@@ -149,6 +150,7 @@ namespace SIPSorcery.SoftPhone
 
             _sipTransportManager.Shutdown();
             _stunClient?.Stop();
+            _settingsWindow?.Close();
         }
 
         /// <summary>
@@ -688,6 +690,29 @@ namespace SIPSorcery.SoftPhone
                 {
                     await client.SendDTMF((byte)11);
                 }
+            }
+        }
+
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (_settingsWindow == null)
+            {
+                _settingsWindow = new SettingsWindow
+                {
+                    Owner = this
+                };
+
+                _settingsWindow.Closed += (s, args) => _settingsWindow = null;
+                _settingsWindow.Show();
+            }
+            else
+            {
+                if (_settingsWindow.Visibility != Visibility.Visible)
+                {
+                    _settingsWindow.Show();
+                }
+
+                _settingsWindow.Activate();
             }
         }
 

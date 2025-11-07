@@ -44,6 +44,12 @@ namespace SIPSorcery.Net
         /// and will be added to the offer SDP.
         /// </summary>
         public bool X_ExcludeIceCandidates;
+
+        /// <summary>
+        /// If set to true it indicates the generation of the SDP offer should wait until the ICE gathering
+        /// is compelte so the ICE cnadidates can be included in the SDP offer.
+        /// </summary>
+        public bool X_WaitForIceGatheringToComplete;
     }
 
     /// <summary>
@@ -232,7 +238,7 @@ namespace SIPSorcery.Net
 
         public List<RTCDtlsFingerprint> getFingerprints()
         {
-            return new List<RTCDtlsFingerprint> { DtlsUtils.Fingerprint(Certificate) };
+            return new List<RTCDtlsFingerprint> { DtlsUtils.Fingerprint(Org.BouncyCastle.Security.DotNetUtilities.FromX509Certificate(Certificate)) };
         }
     }
 
@@ -288,9 +294,6 @@ namespace SIPSorcery.Net
         public RTCIceTransportPolicy iceTransportPolicy;
         public RTCBundlePolicy bundlePolicy;
         public RTCRtcpMuxPolicy rtcpMuxPolicy;
-#pragma warning disable CS0618 // Type or member is obsolete
-        public List<RTCCertificate> certificates;
-#pragma warning restore CS0618 // Type or member is obsolete
         public List<RTCCertificate2> certificates2;
 
         /// <summary>

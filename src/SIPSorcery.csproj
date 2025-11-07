@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
     <PackageReference Include="DnsClient" Version="1.8.0" />
     <PackageReference Include="SIPSorcery.WebSocketSharp" Version="0.0.1" />
@@ -50,16 +51,17 @@
     <Title>SIPSorcery</Title>
     <Summary>A cross platform C# .NET library for SIP, VoIP and WebRTC.</Summary>
     <Description>Real-time communications library with full support for the Session Initiation Protocol (SIP) and WebRTC. No wrappers and no native libraries required.
+    Unofficial fork of SIPSorcery 8.0.11
     </Description>
     <Company>SIP Sorcery PTY LTD</Company>
     <Product>SIPSorcery</Product>
-    <PackageId>SIPSorcery</PackageId>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageId>sistas.SIPSorcery</PackageId>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageProjectUrl>https://sipsorcery-org.github.io/sipsorcery/</PackageProjectUrl>
     <PackageIconUrl>http://www.sipsorcery.com/mainsite/favicon.ico</PackageIconUrl>
     <PackageIcon>icon.png</PackageIcon>
-    <RepositoryUrl>https://github.com/sipsorcery-org/sipsorcery</RepositoryUrl>
+    <RepositoryUrl>https://github.com/SISTASOSS/sipsorcery/tree/test</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryBranch>master</RepositoryBranch>
     <PackageTags>SIP WebRTC VoIP RTP SDP STUN ICE SIPSorcery</PackageTags>
@@ -80,7 +82,7 @@
 -v8.0.1-pre: Performance improvements (thanks to @weltmeyer). Add ECDSA as default option for WebRTC DTLS.
 -v8.0.0: RTP header extension improvements (thanks to @ChristopheI). Major version to 8 to reflect highest .net runtime supported.</PackageReleaseNotes>
     <NeutralLanguage>en</NeutralLanguage>
-    <Version>8.0.22</Version>
+    <Version>8.0.22-sistas.0</Version>
     <AssemblyVersion>8.0.22</AssemblyVersion>
     <FileVersion>8.0.22</FileVersion>
   </PropertyGroup>
@@ -97,5 +99,9 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
+
+  <ItemGroup Label="SourceLink">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
 
 </Project>

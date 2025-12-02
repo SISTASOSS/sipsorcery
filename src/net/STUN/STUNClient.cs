@@ -14,12 +14,12 @@
 //-----------------------------------------------------------------------------
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Org.BouncyCastle.Bcpg;
 using SIPSorcery.Sys;
 
 namespace SIPSorcery.Net;
@@ -31,8 +31,36 @@ public class STUNClient
 {
     public const int DEFAULT_STUN_PORT = 3478;
     private const int STUN_SERVER_RESPONSE_TIMEOUT = 3;
+    private const int STUN_SERVER_RESOLUTION_DEFAULT_TIMEOUT_MILLISECONDS = 5000;
 
     private static readonly ILogger logger = Log.Logger;
+
+    private readonly IceServerResolver _iceServerResolver = new IceServerResolver();
+
+    public STUNClient(string stunServerUrl)
+    {
+        _iceServerResolver.InitialiseIceServers([RTCIceServer.Parse(stunServerUrl)], RTCIceTransportPolicy.all);
+    }
+
+    public async Task<IceServer> ResolveStunServer(int timeoutMilliseconds = STUN_SERVER_RESOLUTION_DEFAULT_TIMEOUT_MILLISECONDS)
+    {
+        await _iceServerResolver.WaitForAllIceServersAsync(TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        var iceServer = _iceServerResolver.IceServers.Select(x => x.Value).FirstOrDefault();
+
+        if (iceServer == null)
+        {
+            logger.LogWarning("No STUN server was available to do a public IP address lookup.");
+            return null;
+        }
+        else if (iceServer.ServerEndPoint == null)
+        {
+            logger.LogWarning("The STUN server end point was not available for {uri}.", iceServer?.Uri);
+            return null;
+        }
+
+        return iceServer;
+    }
 
     /// <summary>
     /// Used to get the public IP address of the client as seen by the STUN server.
@@ -142,40 +170,36 @@ public class STUNClient
     {
         var tcs = new TaskCompletionSource<IPEndPoint>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        void OnRtpDataReceived(int localPort, IPEndPoint remoteEndPoint, byte[] packet)
+        void OnStunMessageReceived(STUNMessage stunResponse, IPEndPoint remoteEndPoint, bool wasRelayed)
         {
             try
             {
-                if (packet?.Length > 0)
+                logger.LogDebug("STUNClient response received from {StunResponseEndPoint}.", remoteEndPoint);
+
+                IPEndPoint result = null;
+
+                foreach (var attr in stunResponse.Attributes)
                 {
-                    logger.LogDebug("STUNClient response received from {StunResponseEndPoint}.", remoteEndPoint);
-
-                    var stunResponse = STUNMessage.ParseSTUNMessage(packet, packet.Length);
-                    IPEndPoint result = null;
-
-                    foreach (var attr in stunResponse.Attributes)
+                    if (attr.AttributeType == STUNAttributeTypesEnum.MappedAddress &&
+                        attr is STUNAddressAttribute mapped)
                     {
-                        if (attr.AttributeType == STUNAttributeTypesEnum.MappedAddress &&
-                            attr is STUNAddressAttribute mapped)
-                        {
-                            result = new IPEndPoint(mapped.Address, mapped.Port);
-                            break;
-                        }
-                        else if (attr.AttributeType == STUNAttributeTypesEnum.XORMappedAddress &&
-                            attr is STUNXORAddressAttribute xorMapped)
-                        {
-                            result = new IPEndPoint(xorMapped.Address, xorMapped.Port);
-                            break;
-                        }
+                        result = new IPEndPoint(mapped.Address, mapped.Port);
+                        break;
                     }
-
-                    if (result != null)
+                    else if (attr.AttributeType == STUNAttributeTypesEnum.XORMappedAddress &&
+                        attr is STUNXORAddressAttribute xorMapped)
                     {
-                        logger.LogDebug("STUNClient public IP={PublicAddress} Port={PublicPort}.", result.Address, result.Port);
+                        result = new IPEndPoint(xorMapped.Address, xorMapped.Port);
+                        break;
                     }
-
-                    tcs.TrySetResult(result);
                 }
+
+                if (result != null)
+                {
+                    logger.LogDebug("STUNClient public IP={PublicAddress} Port={PublicPort}.", result.Address, result.Port);
+                }
+
+                tcs.TrySetResult(result);
             }
             catch (Exception ex)
             {
@@ -183,7 +207,7 @@ public class STUNClient
             }
         }
 
-        rtpChannel.OnRTPDataReceived += OnRtpDataReceived;
+        rtpChannel.OnStunMessageReceived += OnStunMessageReceived;
 
         try
         {
@@ -213,7 +237,7 @@ public class STUNClient
         }
         finally
         {
-            rtpChannel.OnRTPDataReceived -= OnRtpDataReceived;
+            rtpChannel.OnStunMessageReceived -= OnStunMessageReceived;
         }
     }
 }

@@ -539,11 +539,12 @@ namespace SIPSorcery.SIP.App
                 MediaSession.OnRtpEvent += OnRemoteRtpEvent;
                 MediaSession.OnTimeout += OnRtpTimeout;
 
-                var sdpAnnounceAddress = mediaSession.RtpBindAddress ?? NetServices.GetLocalAddressForRemote(serverEndPoint.Address);
+                //var sdpAnnounceAddress = mediaSession.RtpBindAddress ?? NetServices.GetLocalAddressForRemote(serverEndPoint.Address);
 
                 if (string.IsNullOrEmpty(sipCallDescriptor.Content))
                 {
-                    var sdp = mediaSession.CreateOffer(sdpAnnounceAddress);
+                    //var sdp = mediaSession.CreateOffer(sdpAnnounceAddress);
+                    var sdp = mediaSession.CreateOffer();
                     if (sdp == null)
                     {
                         ClientCallFailed?.Invoke(m_uac, $"Could not generate an offer.", null);
@@ -556,7 +557,8 @@ namespace SIPSorcery.SIP.App
                 if (ringTimeout > 0)
                 {
                     logger.LogDebug("Setting ring timeout of {RingTimeout}s.", ringTimeout);
-                    _ringTimeout = new Timer((state) => m_uac?.Cancel(), null, ringTimeout * 1000, Timeout.Infinite);
+                    _ringTimeout = new Timer((state) => m_uac?.Cancel());
+                    _ringTimeout.Change(ringTimeout * 1000, Timeout.Infinite);
                 }
 
                 // This initiates the call but does not wait for an answer.
@@ -744,8 +746,9 @@ namespace SIPSorcery.SIP.App
                 else
                 {
                     // No SDP offer was included in the INVITE request need to wait for the ACK.
-                    var sdpAnnounceAddress = MediaSession.RtpBindAddress ?? NetServices.GetLocalAddressForRemote(sipRequest.RemoteSIPEndPoint.GetIPEndPoint().Address);
-                    var sdpOffer = MediaSession.CreateOffer(sdpAnnounceAddress);
+                    //var sdpAnnounceAddress = MediaSession.RtpBindAddress ?? NetServices.GetLocalAddressForRemote(sipRequest.RemoteSIPEndPoint.GetIPEndPoint().Address);
+                    //var sdpOffer = MediaSession.CreateOffer(sdpAnnounceAddress);
+                    var sdpOffer = MediaSession.CreateOffer();
                     sdp = sdpOffer.ToString();
                 }
 
@@ -984,7 +987,7 @@ namespace SIPSorcery.SIP.App
             {
                 TaskCompletionSource<bool> transferAccepted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                SIPNonInviteTransaction referTx = new SIPNonInviteTransaction(m_transport, referRequest, null);
+                SIPNonInviteTransaction referTx = new SIPNonInviteTransaction(m_transport, referRequest, m_outboundProxy);
 
                 SIPTransactionResponseReceivedDelegate referTxStatusHandler = (localSIPEndPoint, remoteEndPoint, sipTransaction, sipResponse) =>
                 {
@@ -996,7 +999,7 @@ namespace SIPSorcery.SIP.App
                     else if (sipResponse.Header.CSeqMethod == SIPMethodsEnum.REFER && sipResponse.Status == SIPResponseStatusCodesEnum.ProxyAuthenticationRequired && username != null && password != null)
                     {
                         var newRequest = referRequest.DuplicateAndAuthenticate(sipResponse.Header.AuthenticationHeaders, username, password);
-                        referTx = new SIPNonInviteTransaction(m_transport, newRequest, null);
+                        referTx = new SIPNonInviteTransaction(m_transport, newRequest, m_outboundProxy);
                         SIPTransactionResponseReceivedDelegate referTxStatusHandlerAuthRequest = (localSIPEndPointAuthRequest, remoteEndPointAuthRequest, sipTransactionAuthRequest, sipResponseAuthRequest) =>
                         {
                             if (sipResponseAuthRequest.Header.CSeqMethod == SIPMethodsEnum.REFER && sipResponseAuthRequest.Status == SIPResponseStatusCodesEnum.Accepted)
@@ -1229,7 +1232,7 @@ namespace SIPSorcery.SIP.App
         private void ProcessTransferRequest(SIPRequest referRequest)
         {
             // We use a reliable response to make sure that duplicate REFER requests are ignored.
-            SIPNonInviteTransaction referResponseTx = new SIPNonInviteTransaction(m_transport, referRequest, null);
+            SIPNonInviteTransaction referResponseTx = new SIPNonInviteTransaction(m_transport, referRequest, m_outboundProxy);
 
             if (referRequest.Header.ReferTo.IsNullOrBlank())
             {
@@ -1910,7 +1913,7 @@ namespace SIPSorcery.SIP.App
         {
             if (m_callDescriptor != null)
             {
-                if (m_callDescriptor.CallId.Equals(callId, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(callId) && m_callDescriptor.CallId.Equals(callId, StringComparison.OrdinalIgnoreCase))
                 {
                     m_uac = null;
                     m_callDescriptor = null;

@@ -88,9 +88,14 @@ namespace SIPSorcery.SIP
 
             protected override void OnOpen()
             {
-                Logger.LogDebug("SIPMessagWebSocketBehavior.OnOpen.");
+                Logger.LogDebug(
+                    "SIPMessagWebSocketBehavior.OnOpen: id {ConnectionId}, local {LocalEndPoint}, remote {RemoteEndPoint}, secure {IsSecure}.",
+                    this.ID,
+                    this.Context?.ServerEndPoint,
+                    this.Context?.UserEndPoint,
+                    this.Context?.IsSecureConnection ?? false);
 
-                _sipProtocol = this.Context.IsSecureConnection ? SIPProtocolsEnum.wss : SIPProtocolsEnum.ws;
+                _sipProtocol = Channel?.SIPProtocol ?? (this.Context.IsSecureConnection ? SIPProtocolsEnum.wss : SIPProtocolsEnum.ws);
                 _remoteEndPoint = this.Context.UserEndPoint;
                 _localEndPoint = this.Context.ServerEndPoint;
 
@@ -112,13 +117,40 @@ namespace SIPSorcery.SIP
 
             protected override void OnClose(CloseEventArgs e)
             {
-                Logger.LogDebug("SIPMessagWebSocketBehavior.OnClose: reason {Reason}, was clean {WasClean}.", e.Reason, e.WasClean);
+                if (e.WasClean && e.Code == (ushort)CloseStatusCode.Normal)
+                {
+                    Logger.LogDebug(
+                        "SIPMessagWebSocketBehavior.OnClose: id {ConnectionId}, local {LocalEndPoint}, remote {RemoteEndPoint}, code {Code}, reason {Reason}, clean {WasClean}.",
+                        this.ID,
+                        _localEndPoint,
+                        _remoteEndPoint,
+                        e.Code,
+                        e.Reason,
+                        e.WasClean);
+                }
+                else
+                {
+                    Logger.LogWarning(
+                        "SIPMessagWebSocketBehavior.OnClose: id {ConnectionId}, local {LocalEndPoint}, remote {RemoteEndPoint}, code {Code}, reason {Reason}, clean {WasClean}.",
+                        this.ID,
+                        _localEndPoint,
+                        _remoteEndPoint,
+                        e.Code,
+                        e.Reason,
+                        e.WasClean);
+                }
                 OnClientClose?.Invoke(this.ID);
             }
 
             protected override void OnError(ErrorEventArgs e)
             {
-                Logger.LogDebug("SIPMessagWebSocketBehavior.OnError: reason {Message}.", e.Message);
+                Logger.LogWarning(
+                    e.Exception,
+                    "SIPMessagWebSocketBehavior.OnError: id {ConnectionId}, local {LocalEndPoint}, remote {RemoteEndPoint}, reason {Message}.",
+                    this.ID,
+                    _localEndPoint,
+                    _remoteEndPoint,
+                    e.Message);
             }
 
             public void Send(byte[] buffer, int offset, int length)
@@ -140,10 +172,19 @@ namespace SIPSorcery.SIP
         private ConcurrentDictionary<string, SIPMessagWebSocketBehavior> m_ingressConnections = new ConcurrentDictionary<string, SIPMessagWebSocketBehavior>();
 
         private CancellationTokenSource m_cts = new CancellationTokenSource();
+        private readonly bool? _ignoreExtensionsOverride;
 
         public SIPWebSocketChannel(
             IPEndPoint endPoint,
-            X509Certificate2 certificate) : this(endPoint, SIPConstants.DEFAULT_ENCODING, SIPConstants.DEFAULT_ENCODING, certificate)
+            X509Certificate2 certificate) : this(endPoint, SIPConstants.DEFAULT_ENCODING, SIPConstants.DEFAULT_ENCODING, certificate, null)
+        {
+
+        }
+
+        public SIPWebSocketChannel(
+            IPEndPoint endPoint,
+            X509Certificate2 certificate,
+            bool? ignoreExtensionsOverride) : this(endPoint, SIPConstants.DEFAULT_ENCODING, SIPConstants.DEFAULT_ENCODING, certificate, ignoreExtensionsOverride)
         {
 
         }
@@ -160,19 +201,39 @@ namespace SIPSorcery.SIP
             Encoding sipBodyEncoding,
             X509Certificate2 certificate)
             // default ServerSslConfiguration of previous implementation
-            : this(endPoint, sipEncoding, sipBodyEncoding, certificate == null ? null : new ServerSslConfiguration(certificate) { CheckCertificateRevocation = false})
+            : this(endPoint, sipEncoding, sipBodyEncoding, certificate == null ? null : new ServerSslConfiguration(certificate) { CheckCertificateRevocation = false}, null)
         { }
 
         public SIPWebSocketChannel(
             IPEndPoint endPoint,
             Encoding sipEncoding,
             Encoding sipBodyEncoding,
-            ServerSslConfiguration sslConfiguration) : base(sipEncoding, sipBodyEncoding)
+            X509Certificate2 certificate,
+            bool? ignoreExtensionsOverride)
+            // default ServerSslConfiguration of previous implementation
+            : this(endPoint, sipEncoding, sipBodyEncoding, certificate == null ? null : new ServerSslConfiguration(certificate) { CheckCertificateRevocation = false}, ignoreExtensionsOverride)
+        { }
+
+        public SIPWebSocketChannel(
+            IPEndPoint endPoint,
+            Encoding sipEncoding,
+            Encoding sipBodyEncoding,
+            ServerSslConfiguration sslConfiguration) : this(endPoint, sipEncoding, sipBodyEncoding, sslConfiguration, null)
+        { }
+
+        public SIPWebSocketChannel(
+            IPEndPoint endPoint,
+            Encoding sipEncoding,
+            Encoding sipBodyEncoding,
+            ServerSslConfiguration sslConfiguration,
+            bool? ignoreExtensionsOverride) : base(sipEncoding, sipBodyEncoding)
         {
             if (endPoint == null)
             {
                 throw new ArgumentNullException("endPoint", "The end point must be specified when creating a SIPWebSocketChannel.");
             }
+
+            _ignoreExtensionsOverride = ignoreExtensionsOverride;
 
             ListeningIPAddress = endPoint.Address;
             Port = endPoint.Port;
@@ -206,6 +267,10 @@ namespace SIPSorcery.SIP
             {
                 behaviour.Channel = this;
                 behaviour.Logger = this.logger;
+                if (_ignoreExtensionsOverride.HasValue)
+                {
+                    behaviour.IgnoreExtensions = _ignoreExtensionsOverride.Value;
+                }
 
                 behaviour.OnClientClose += (id) => m_ingressConnections.TryRemove(id, out _);
             });
@@ -215,6 +280,10 @@ namespace SIPSorcery.SIP
 
         public SIPWebSocketChannel(IPAddress listenAddress, int listenPort)
             : this(new IPEndPoint(listenAddress, listenPort), null)
+        { }
+
+        public SIPWebSocketChannel(IPAddress listenAddress, int listenPort, bool? ignoreExtensionsOverride)
+            : this(new IPEndPoint(listenAddress, listenPort), null, ignoreExtensionsOverride)
         { }
 
         /// <summary>
@@ -227,6 +296,10 @@ namespace SIPSorcery.SIP
         /// which typically involved checking that the hostname of the server matches the certificate's common name.</param>
         public SIPWebSocketChannel(IPAddress listenAddress, int listenPort, X509Certificate2 certificate)
             : this(new IPEndPoint(listenAddress, listenPort), certificate)
+        { }
+
+        public SIPWebSocketChannel(IPAddress listenAddress, int listenPort, X509Certificate2 certificate, bool? ignoreExtensionsOverride)
+            : this(new IPEndPoint(listenAddress, listenPort), certificate, ignoreExtensionsOverride)
         { }
 
         /// <summary>

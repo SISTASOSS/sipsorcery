@@ -685,6 +685,20 @@ namespace SIPSorcery.SIP
             else
             {
                 var topViaHeader = sipResponse.Header.Vias.TopViaHeader;
+                if (string.IsNullOrEmpty(sipResponse.SendFromHintChannelID) && sipResponse.LocalSIPEndPoint != null)
+                {
+                    sipResponse.SendFromHintChannelID = sipResponse.LocalSIPEndPoint.ChannelID;
+                    sipResponse.SendFromHintConnectionID = sipResponse.LocalSIPEndPoint.ConnectionID;
+                }
+
+                if (!string.IsNullOrEmpty(sipResponse.SendFromHintChannelID) &&
+                    m_sipChannels.TryGetValue(sipResponse.SendFromHintChannelID, out var hintChannel) &&
+                    hintChannel != null &&
+                    !hintChannel.IsProtocolSupported(topViaHeader.Transport))
+                {
+                    topViaHeader.Transport = hintChannel.SIPProtocol;
+                }
+
                 SIPURI topViaUri = new SIPURI(null, topViaHeader.ReceivedFromAddress, null, SIPSchemesEnum.sip, topViaHeader.Transport);
 
                 var cacheResult = ResolveSIPUriFromCacheCallback(topViaUri, PreferIPv6NameResolution);

@@ -761,7 +761,14 @@ namespace SIPSorcery.Net
                 {
                     // Cache pending packages to use it later to prevent missing frames
                     // when DTLS was not completed yet as a Server bt already completed as a client
-                    AddPendingPackage(hdr, localPort, remoteEndPoint, buffer);
+                    var queued = AddPendingPackage(hdr, localPort, remoteEndPoint, buffer);
+                    logger.LogDebug(
+                        "RTP event packet deferred. Media={MediaType} SSRC={Ssrc} PayloadID={PayloadType} Remote={RemoteEndPoint} Queued={Queued}.",
+                        MediaType,
+                        hdr.SyncSource,
+                        hdr.PayloadType,
+                        remoteEndPoint,
+                        queued);
                     return;
                 }
 
@@ -789,6 +796,12 @@ namespace SIPSorcery.Net
 
             if (!EnsureBufferUnprotected(buffer, hdr, out rtpPacket))
             {
+                logger.LogDebug(
+                    "RTP packet dropped: SRTP unprotect failed. Media={MediaType} SSRC={Ssrc} PayloadID={PayloadType} Remote={RemoteEndPoint}.",
+                    MediaType,
+                    hdr.SyncSource,
+                    hdr.PayloadType,
+                    remoteEndPoint);
                 return;
             }
 
@@ -816,6 +829,22 @@ namespace SIPSorcery.Net
                 }
 
                 RtcpSession?.RecordRtpPacketReceived(rtpPacket);
+            }
+            else if (format == null)
+            {
+                if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    var capabilities = LocalTrack?.Capabilities != null
+                        ? string.Join(",", LocalTrack.Capabilities.Select(cap => cap.ID))
+                        : "none";
+                    logger.LogDebug(
+                        "RTP packet dropped: payload type not in local track capabilities. Media={MediaType} SSRC={Ssrc} PayloadID={PayloadType} Remote={RemoteEndPoint} Capabilities={Capabilities}.",
+                        MediaType,
+                        hdr.SyncSource,
+                        hdr.PayloadType,
+                        remoteEndPoint,
+                        capabilities);
+                }
             }
         }
 

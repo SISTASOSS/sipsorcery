@@ -370,7 +370,7 @@ public class RTPChannel : IDisposable
             // - the RTP connection may start sending before the remote socket starts listening,
             // - an on hold, transfer, etc. operation can change the RTP end point which could result in socket errors from the old
             //   or new socket during the transition.
-            logger.LogWarning(sockExcp, "SocketException RTPChannel EndSendTo ({SocketErrorCode}). {Message}", sockExcp.ErrorCode, sockExcp.Message);
+            logger.LogDebug(sockExcp, "SocketException RTPChannel EndSendTo ({SocketErrorCode}). {Message}", sockExcp.ErrorCode, sockExcp.Message);
         }
         catch (ObjectDisposedException) // Thrown when socket is closed. Can be safely ignored.
         { }

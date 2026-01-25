@@ -11,8 +11,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SIPSorcery.UnitTests", "..\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SIPSorcery.IntegrationTests", "..\test\integration\SIPSorcery.IntegrationTests.csproj", "{2E657CD6-B4F1-4952-8815-913898E2352F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "websocket-sharp", "..\..\SISTASOSS\websocket-sharp\websocket-sharp\websocket-sharp.csproj", "{389BF99C-4B22-4FCB-B5E9-9267A411203C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,18 +69,6 @@ Global
 		{0B69B365-8C2D-4C97-91B3-8D8484636612}.Release|x64.Build.0 = Release|Any CPU
 		{0B69B365-8C2D-4C97-91B3-8D8484636612}.Release|x86.ActiveCfg = Release|Any CPU
 		{0B69B365-8C2D-4C97-91B3-8D8484636612}.Release|x86.Build.0 = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|x64.Build.0 = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Debug|x86.Build.0 = Debug|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|x64.ActiveCfg = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|x64.Build.0 = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|x86.ActiveCfg = Release|Any CPU
-		{389BF99C-4B22-4FCB-B5E9-9267A411203C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

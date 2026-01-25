@@ -2586,20 +2586,55 @@ namespace SIPSorcery.Net
                 var hdr = new RTPHeader(buffer);
 
                 MediaStream mediaStream = GetMediaStream(hdr.SyncSource);
+                if (mediaStream == null)
+                {
+                    logger.LogTrace(
+                        "RTP packet no stream match by SSRC {SyncSource}. PayloadID={PayloadType} LocalPort={LocalPort} Remote={RemoteEndPoint}.",
+                        hdr.SyncSource,
+                        hdr.PayloadType,
+                        localPort,
+                        remoteEndPoint);
+                }
 
                 if ((mediaStream == null) && (AudioStreamList.Count < 2) && (VideoStreamList.Count < 2) && (TextStreamList.Count < 2))
                 {
                     mediaStream = GetMediaStreamFromPayloadType(hdr.PayloadType);
+                    if (mediaStream == null)
+                    {
+                        logger.LogTrace(
+                            "RTP packet no stream match by payload type {PayloadType}. SSRC={SyncSource} LocalPort={LocalPort} Remote={RemoteEndPoint}.",
+                            hdr.PayloadType,
+                            hdr.SyncSource,
+                            localPort,
+                            remoteEndPoint);
+                    }
                 }
 
                 if (mediaStream == null)
                 {
                     mediaStream = GetMediaStreamByRTPPort(localPort);
+                    if (mediaStream == null)
+                    {
+                        logger.LogTrace(
+                            "RTP packet no stream match by RTP port {LocalPort}. SSRC={SyncSource} PayloadID={PayloadType} Remote={RemoteEndPoint}.",
+                            localPort,
+                            hdr.SyncSource,
+                            hdr.PayloadType,
+                            remoteEndPoint);
+                    }
                 }
 
                 if (mediaStream == null)
                 {
-                    logger.LogWarning("An RTP packet with SSRC {SyncSource} and payload ID {PayloadType} was received that could not be matched to an audio or video stream.", hdr.SyncSource, hdr.PayloadType);
+                    logger.LogInformation(
+                        "An RTP packet with SSRC {SyncSource} and payload ID {PayloadType} was received that could not be matched to an audio or video stream. LocalPort={LocalPort} Remote={RemoteEndPoint} AudioStreams={AudioStreams} VideoStreams={VideoStreams} TextStreams={TextStreams}.",
+                        hdr.SyncSource,
+                        hdr.PayloadType,
+                        localPort,
+                        remoteEndPoint,
+                        AudioStreamList.Count,
+                        VideoStreamList.Count,
+                        TextStreamList.Count);
                     return;
                 }
 

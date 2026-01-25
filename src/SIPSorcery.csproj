@@ -19,9 +19,9 @@
 
   <ItemGroup>
     <PackageReference Include="Concentus" Version="2.2.2" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
     <PackageReference Include="DnsClient" Version="1.8.0" />
+    <PackageReference Include="SIPSorcery.WebSocketSharp" Version="0.0.1" />
     <PackageReference Include="SIPSorceryMedia.Abstractions" Version="8.0.12" />
     <PackageReference Include="System.Net.WebSockets.Client" Version="4.3.2" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
@@ -40,8 +40,8 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;netcoreapp3.1;net462;net5.0;net6.0;net8.0</TargetFrameworks>
-    <LangVersion>12.0</LangVersion>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;netcoreapp3.1;net462;net5.0;net6.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
     <NoWarn>$(NoWarn);SYSLIB0050</NoWarn>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
@@ -49,12 +49,12 @@
     <!-- Disable warning for missing XML doc comments. -->
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1587</NoWarn>
     <Authors>Aaron Clauson, Christophe Irles, Rafael Soares &amp; Contributors</Authors>
-    <Copyright>Copyright © 2010-2025 Aaron Clauson</Copyright>
+    <Copyright>Copyright © 2010-2026 Aaron Clauson</Copyright>
     <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
     <Title>SIPSorcery</Title>
     <Summary>A cross platform C# .NET library for SIP, VoIP and WebRTC.</Summary>
     <Description>Real-time communications library with full support for the Session Initiation Protocol (SIP) and WebRTC. No wrappers and no native libraries required.
-    Unofficial fork of SIPSorcery 8.0.23
+    Unofficial fork of SIPSorcery v10.0.4-pre
     </Description>
     <Company>SIP Sorcery PTY LTD</Company>
     <Product>SIPSorcery</Product>
@@ -68,7 +68,10 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryBranch>master</RepositoryBranch>
     <PackageTags>SIP WebRTC VoIP RTP SDP STUN ICE SIPSorcery</PackageTags>
-    <PackageReleaseNotes>-8.0.23-sistas.3 AlternativeService ResponseCode moved to 380,
+    <PackageReleaseNotes>-v10.0.4-pre-sistas.0: New SRTP and DTLS implementation (huge thanks to @jimm98y).
+-v10.0.3: Removed null SRTP ciphers.
+-v10.0.2: Removed use of master key index for SRTP.
+-v10.0.1: Support for .NET 10.0 added.
 -v8.0.23: Bug fixes.
 -v8.0.22: Stable release.
 -v8.0.21-pre: Improvements to OPUS encoder wiring.
@@ -87,9 +90,9 @@
 -v8.0.1-pre: Performance improvements (thanks to @weltmeyer). Add ECDSA as default option for WebRTC DTLS.
 -v8.0.0: RTP header extension improvements (thanks to @ChristopheI). Major version to 8 to reflect highest .net runtime supported.</PackageReleaseNotes>
     <NeutralLanguage>en</NeutralLanguage>
-    <Version>8.0.23-sistas.3</Version>
-    <AssemblyVersion>8.0.23</AssemblyVersion>
-    <FileVersion>8.0.23</FileVersion>
+    <Version>10.0.4-pre-sistas.0</Version>
+    <AssemblyVersion>10.0.4</AssemblyVersion>
+    <FileVersion>10.0.4</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Label="SourceLink">

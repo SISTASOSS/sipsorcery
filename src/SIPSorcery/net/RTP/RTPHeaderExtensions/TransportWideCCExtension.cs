@@ -33,10 +33,22 @@ namespace SIPSorcery.Net
         //
 
         public const string RTP_HEADER_EXTENSION_URI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
-        //public const string RTP_HEADER_EXTENSION_URI_ALT = "http://www.webrtc.org/experiments/rtp-hdrext/transport-wide-cc-02";
+
+
+        public override bool MatchesExtension(string uri)
+        {
+            return string.Equals(uri, RTP_HEADER_EXTENSION_URI, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(uri, "urn:ietf:params:rtp-hdrext:transport-wide-cc", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(uri, "http://www.webrtc.org/experiments/rtp-hdrext/transport-wide-cc-02", StringComparison.OrdinalIgnoreCase);
+        }
 
 
         internal const int RTP_HEADER_EXTENSION_SIZE = 2; // TWCC payload: 2 bytes for sequence number.
+
+        public TransportWideCCExtension(int id, string uri)
+            : base(id, uri, RTP_HEADER_EXTENSION_SIZE, RTPHeaderExtensionType.OneByte)
+        {
+        }
 
         /// <summary>
         /// The TWCC sequence number.

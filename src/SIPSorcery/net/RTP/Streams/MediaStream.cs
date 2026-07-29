@@ -309,21 +309,11 @@ namespace SIPSorcery.Net
                 int res = 0;
                 int outBufLen = 0;
 
-                if (RtpSessionConfig.IsMediaMultiplexed)
-                {
-                    lock (rtpChannel)
-                    {
-                        res = unprotectRtpPacket(buffer, buffer.Length, out outBufLen);
-                    }
-                }
-                else
-                {
-                    res = unprotectRtpPacket(buffer, buffer.Length, out outBufLen);
-                }
+                res = unprotectRtpPacket(buffer, buffer.Length, out outBufLen);
 
                 if (res == 0)
                 {
-                    return (true, buffer.Take(outBufLen).ToArray());
+                    return (true, buffer.AsSpan(0, outBufLen).ToArray());
                 }
                 else
                 {
@@ -420,7 +410,7 @@ namespace SIPSorcery.Net
 
         protected void SendRtpRaw(ArraySegment<byte> data, uint timestamp, int markerBit, int payloadType, Boolean checkDone, ushort? seqNum = null)
         {
-            if (checkDone || CheckIfCanSendRtpRaw())
+            if (HasRtpChannel() && (checkDone || CheckIfCanSendRtpRaw()))
             {
                 ProtectRtpPacket protectRtpPacket = SecureContext?.ProtectRtpPacket;
                 int srtpProtectionLength = (protectRtpPacket != null) ? RTPSession.SRTP_MAX_PREFIX_LENGTH : 0;
@@ -501,19 +491,7 @@ namespace SIPSorcery.Net
                     int rtperr = 0;
                     int outBufLen = 0;
 
-                    if (RtpSessionConfig.IsMediaMultiplexed)
-                    {
-                        // Multiplexing means that a single rtpChannel is used by multiple MediaStreams from multiple threads. We have
-                        //  to ensure that ProtectRtp is being called only from a single thread, otherwise encryption will fail.
-                        lock (rtpChannel)
-                        {
-                            rtperr = protectRtpPacket(rtpBuffer, rtpBuffer.Length - srtpProtectionLength, out outBufLen);
-                        }
-                    }
-                    else
-                    {
-                        rtperr = protectRtpPacket(rtpBuffer, rtpBuffer.Length - srtpProtectionLength, out outBufLen);
-                    }                        
+                    rtperr = protectRtpPacket(rtpBuffer, rtpBuffer.Length - srtpProtectionLength, out outBufLen);
 
                     if (rtperr != 0)
                     {
@@ -522,7 +500,7 @@ namespace SIPSorcery.Net
                     }
                     else
                     {
-                        rtpBuffer = rtpBuffer.Take(outBufLen).ToArray();
+                        rtpBuffer = rtpBuffer.AsSpan(0, outBufLen).ToArray();
                     }
                 }
 
@@ -665,7 +643,7 @@ namespace SIPSorcery.Net
                 logger.LogWarning("SendRtcpReport cannot be called on a secure session before calling SetSecurityContext.");
                 return false;
             }
-            else if (ControlDestinationEndPoint != null)
+            else if (HasRtpChannel() && ControlDestinationEndPoint != null)
             {
                 //logger.LogDebug("SendRtcpReport: {ReportBytes}", reportBytes.HexStr());
 
@@ -688,17 +666,7 @@ namespace SIPSorcery.Net
                     int rtperr = 0;
                     int outBufLen = 0;
 
-                    if (RtpSessionConfig.IsMediaMultiplexed && RtpSessionConfig.IsRtcpMultiplexed)
-                    {
-                        lock (rtpChannel)
-                        {
-                            rtperr = protectRtcpPacket(sendBuffer, sendBuffer.Length - RTPSession.SRTP_MAX_PREFIX_LENGTH, out outBufLen);
-                        }
-                    }
-                    else
-                    {
-                        rtperr = protectRtcpPacket(sendBuffer, sendBuffer.Length - RTPSession.SRTP_MAX_PREFIX_LENGTH, out outBufLen);
-                    }
+                    rtperr = protectRtcpPacket(sendBuffer, sendBuffer.Length - RTPSession.SRTP_MAX_PREFIX_LENGTH, out outBufLen);
 
                     if (rtperr != 0)
                     {
@@ -710,7 +678,7 @@ namespace SIPSorcery.Net
                         //logger.LogDebug("Sending key {MediaType} RTCP packet size {Size} to {EndPoint}.",
                         //    MediaType, outBufLen, ControlDestinationEndPoint);
 
-                        rtpChannel.Send(sendOnSocket, ControlDestinationEndPoint, sendBuffer.Take(outBufLen).ToArray());
+                        rtpChannel.Send(sendOnSocket, ControlDestinationEndPoint, sendBuffer.AsSpan(0, outBufLen).ToArray());
                     }
                 }
             }
@@ -813,7 +781,11 @@ namespace SIPSorcery.Net
 
             var format = LocalTrack?.GetFormatForPayloadID(hdr.PayloadType);
 
-            if (rtpPacket != null && format != null)
+            if(format == null || format.Value.IsEmpty())
+            {
+                logger.LogWarning("Received RTP packet with unknown payload type {PayloadType} for {MediaType} stream from {RemoteEndPoint}.", hdr.PayloadType, MediaType, remoteEndPoint);
+            }
+            else if (rtpPacket != null)
             {
                 if (UseBuffer())
                 {
@@ -831,6 +803,13 @@ namespace SIPSorcery.Net
                 }
                 else
                 {
+                    if (RemoteTrack != null)
+                    {
+                        // Must be updated for LogIfWrongSeqNumber to function: with the initial
+                        // value of 0 the sequence discontinuity check never fires, so the
+                        // unbuffered path previously never reported out of order packets.
+                        RemoteTrack.LastRemoteSeqNum = rtpPacket.Header.SequenceNumber;
+                    }
                     ProcessRtpPacket(remoteEndPoint, rtpPacket, format.Value);
                 }
 
@@ -948,11 +927,14 @@ namespace SIPSorcery.Net
 
         protected void LogIfWrongSeqNumber(string trackType, RTPHeader header, MediaStreamTrack track)
         {
-            if (track.LastRemoteSeqNum != 0 &&
-                header.SequenceNumber != (track.LastRemoteSeqNum + 1) &&
-                !(header.SequenceNumber == 0 && track.LastRemoteSeqNum == ushort.MaxValue))
+            if (logger.IsEnabled(LogLevel.Trace))
             {
-                logger.LogWarning("{TrackType} stream sequence number jumped from {LastRemoteSeqNum} to {SequenceNumber}.", trackType, track.LastRemoteSeqNum, header.SequenceNumber);
+                if (track.LastRemoteSeqNum != 0 &&
+                    header.SequenceNumber != (track.LastRemoteSeqNum + 1) &&
+                    !(header.SequenceNumber == 0 && track.LastRemoteSeqNum == ushort.MaxValue))
+                {
+                    logger.LogTrace("{TrackType} stream sequence number jumped from {LastRemoteSeqNum} to {SequenceNumber}.", trackType, track.LastRemoteSeqNum, header.SequenceNumber);
+                }
             }
         }
 

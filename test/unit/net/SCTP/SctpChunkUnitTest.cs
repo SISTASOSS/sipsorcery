@@ -16,13 +16,14 @@
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using SIPSorcery.Sys;
+using SIPSorcery.UnitTests;
 using Xunit;
 
 namespace SIPSorcery.Net.UnitTests
 {
     public class SctpChunkUnitTest
     {
-        private ILogger logger = null;
+        private readonly ILogger logger;
 
         public SctpChunkUnitTest(Xunit.Abstractions.ITestOutputHelper output)
         {
@@ -35,8 +36,8 @@ namespace SIPSorcery.Net.UnitTests
         [Fact]
         public void RoundtripHeartBeatChunk()
         {
-            logger.LogDebug("--> {MethodName}", System.Reflection.MethodBase.GetCurrentMethod().Name);
-            logger.BeginScope(System.Reflection.MethodBase.GetCurrentMethod().Name);
+            logger.LogDebug("--> {MethodName}", TestHelper.GetCurrentMethodName());
+            logger.BeginScope(TestHelper.GetCurrentMethodName());
 
             SctpChunk heartbeatChunk = new SctpChunk(SctpChunkType.HEARTBEAT)
             {

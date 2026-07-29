@@ -263,11 +263,14 @@ namespace SIPSorcery.Net
                 lock (_renegotiationLock)
                 {
                     _requireRenegotiation = value;
-                    //Remove Remote Description
-                    if (_requireRenegotiation)
-                    {
-                        RemoteDescription = null;
-                    }
+
+                    // RemoteDescription is intentionally preserved during renegotiation.
+                    // createBaseSdp() needs it to maintain the m-line order from the
+                    // previous offer/answer exchange (RFC 3264 §8).
+                    // if (_requireRenegotiation)
+                    // {
+                    //     RemoteDescription = null;
+                    // }
                 }
 
                 //Remove NegotiationTask when state not stable
@@ -344,6 +347,10 @@ namespace SIPSorcery.Net
             {
                 _configuration = configuration;
 
+                //test turns:
+                //_configuration.iceTransportPolicy = RTCIceTransportPolicy.relay;
+                //_configuration.iceServers = _configuration.iceServers.Where(p => p.urls.StartsWith("turns")).ToList();
+
                 if (!InitializeCertificates(configuration))
                 {
                     logger.LogDebug("No DTLS certificate is provided in the configuration");
@@ -375,6 +382,12 @@ namespace SIPSorcery.Net
             addSingleTrack(videoAsPrimary);
 
             _rtpIceChannel = GetRtpChannel();
+
+            // Propagate any translator that was set before the channel existed.
+            if (_remoteEndpointTranslator != null)
+            {
+                _rtpIceChannel.RemoteEndpointTranslator = _remoteEndpointTranslator;
+            }
 
             _rtpIceChannel.OnIceCandidate += (candidate) => _onIceCandidate?.Invoke(candidate);
             _rtpIceChannel.OnIceConnectionStateChange += IceConnectionStateChange;
@@ -856,22 +869,44 @@ namespace SIPSorcery.Net
                     ann.HeaderExtensions.Clear();
 
                     var localHeaderExtensions = AudioStreamList[indexAudioStream].LocalTrack?.HeaderExtensions?.Values;
-                    if (localHeaderExtensions != null)
-                    {
-                        foreach (var localExtension in localHeaderExtensions)
-                        {
-                            // We must ensure to use same Id by extension
-                            if (_rtpExtensionsUsed.ContainsKey(localExtension.Uri))
-                            {
-                                localExtension.Id = _rtpExtensionsUsed[localExtension.Uri];
-                            }
-                            else
-                            {
-                                _rtpExtensionsUsed[localExtension.Uri] = localExtension.Id;
-                            }
+                    var remoteHeaderExtensions = AudioStreamList[indexAudioStream].RemoteTrack?.HeaderExtensions?.Values;
 
-                            logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
-                            ann.HeaderExtensions[localExtension.Id] = localExtension;
+                    if (localHeaderExtensions?.Count > 0)
+                    {
+                        // Do we have already some extensions set ?
+                        if (remoteHeaderExtensions is null || remoteHeaderExtensions.Count == 0)
+                        {
+                            foreach (var localExtension in localHeaderExtensions)
+                            {
+                                // We must ensure to use same Id by extension
+                                if (_rtpExtensionsUsed.ContainsKey(localExtension.Uri))
+                                {
+                                    localExtension.Id = _rtpExtensionsUsed[localExtension.Uri];
+                                }
+                                else
+                                {
+                                    _rtpExtensionsUsed[localExtension.Uri] = localExtension.Id;
+                                }
+
+                                logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
+                                ann.HeaderExtensions[localExtension.Id] = localExtension;
+                            }
+                        }
+                        else
+                        {
+                            foreach (var remoteExtension in remoteHeaderExtensions)
+                            {
+                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.MatchesExtension(remoteExtension.Uri));
+                                if ((localExtension != null) && _rtpExtensionsUsed.ContainsKey(remoteExtension.Uri))
+                                {
+                                    // We must ensure to use same Id by extension
+                                    localExtension.Id = _rtpExtensionsUsed[remoteExtension.Uri];
+                                    localExtension.Uri = remoteExtension.Uri;// Keep same Uri as remote
+
+                                    logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
+                                    ann.HeaderExtensions.Add(localExtension.Id, localExtension);
+                                }
+                            }
                         }
                     }
                     indexAudioStream++;
@@ -882,22 +917,43 @@ namespace SIPSorcery.Net
                     ann.HeaderExtensions.Clear();
 
                     var localHeaderExtensions = VideoStreamList[indexVideoStream].LocalTrack?.HeaderExtensions?.Values;
-                    if (localHeaderExtensions != null)
+                    var remoteHeaderExtensions = VideoStreamList[indexVideoStream].RemoteTrack?.HeaderExtensions?.Values;
+                    if (localHeaderExtensions?.Count > 0)
                     {
-                        foreach (var localExtension in localHeaderExtensions)
+                        // Do we have already some extensions set ?
+                        if (remoteHeaderExtensions is null || remoteHeaderExtensions.Count == 0)
                         {
-                            // We must ensure to use same Id by extension
-                            if (_rtpExtensionsUsed.ContainsKey(localExtension.Uri))
+                            foreach (var localExtension in localHeaderExtensions)
                             {
-                                localExtension.Id = _rtpExtensionsUsed[localExtension.Uri];
-                            }
-                            else
-                            {
-                                _rtpExtensionsUsed[localExtension.Uri] = localExtension.Id;
-                            }
+                                // We must ensure to use same Id by extension
+                                if (_rtpExtensionsUsed.ContainsKey(localExtension.Uri))
+                                {
+                                    localExtension.Id = _rtpExtensionsUsed[localExtension.Uri];
+                                }
+                                else
+                                {
+                                    _rtpExtensionsUsed[localExtension.Uri] = localExtension.Id;
+                                }
 
-                            logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
-                            ann.HeaderExtensions[localExtension.Id] = localExtension;
+                                logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
+                                ann.HeaderExtensions[localExtension.Id] = localExtension;
+                            }
+                        }
+                        else
+                        {
+                            foreach (var remoteExtension in remoteHeaderExtensions)
+                            {
+                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.MatchesExtension(remoteExtension.Uri));
+                                if ((localExtension != null) && _rtpExtensionsUsed.ContainsKey(remoteExtension.Uri))
+                                {
+                                    // We must ensure to use same Id by extension
+                                    localExtension.Id = _rtpExtensionsUsed[remoteExtension.Uri];
+                                    localExtension.Uri = remoteExtension.Uri;// Keep same Uri as remote
+
+                                    logger.LogDebug("[createOffer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
+                                    ann.HeaderExtensions.Add(localExtension.Id, localExtension);
+                                }
+                            }
                         }
                     }
                     indexVideoStream++;
@@ -978,7 +1034,8 @@ namespace SIPSorcery.Net
                 }
 
                 bool excludeIceCandidates = options != null && options.X_ExcludeIceCandidates;
-                var answerSdp = createBaseSdp(mediaStreamList, excludeIceCandidates);
+                bool waitForIceGatheringToComplete = options != null && options.X_WaitForIceGatheringToComplete;
+                var answerSdp = createBaseSdp(mediaStreamList, excludeIceCandidates, waitForIceGatheringToComplete);
 
                 int indexAudioStream = 0;
                 int indexVideoStream = 0;
@@ -996,11 +1053,12 @@ namespace SIPSorcery.Net
                         {
                             foreach (var remoteExtension in remoteHeaderExtensions)
                             {
-                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.Uri == remoteExtension.Uri);
+                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.MatchesExtension(remoteExtension.Uri));
                                 if ((localExtension != null) && _rtpExtensionsUsed.ContainsKey(remoteExtension.Uri))
                                 {
                                     // We must ensure to use same Id by extension
                                     localExtension.Id = _rtpExtensionsUsed[remoteExtension.Uri];
+                                    localExtension.Uri = remoteExtension.Uri;// Keep same Uri as remote
 
                                     logger.LogDebug("[createAnswer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
                                     ann.HeaderExtensions.Add(localExtension.Id, localExtension);
@@ -1020,11 +1078,12 @@ namespace SIPSorcery.Net
                         {
                             foreach (var remoteExtension in remoteHeaderExtensions)
                             {
-                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.Uri == remoteExtension.Uri);
+                                var localExtension = localHeaderExtensions.FirstOrDefault(ext => ext.MatchesExtension(remoteExtension.Uri));
                                 if ((localExtension != null) && _rtpExtensionsUsed.ContainsKey(remoteExtension.Uri))
                                 {
                                     // We must ensure to use same Id by extension
                                     localExtension.Id = _rtpExtensionsUsed[remoteExtension.Uri];
+                                    localExtension.Uri = remoteExtension.Uri; // Keep same Uri as remote
 
                                     logger.LogDebug("[createAnswer] - {Media}:[{MediaID}] - Add HeaderExtensions:[{Id} - {Uri}]", ann.Media, ann.MediaID, localExtension.Id, localExtension.Uri);
                                     ann.HeaderExtensions.Add(localExtension.Id, localExtension);
@@ -1162,9 +1221,13 @@ namespace SIPSorcery.Net
             };
 
             // Media announcements must be in the same order in the offer and answer.
+            // Existing media types reuse their index from the previous answer; new types
+            // (not present in RemoteDescription) are appended after all existing m-lines
+            // per RFC 3264 §8.
             int mediaIndex = 0;
             int audioMediaIndex = 0;
             int videoMediaIndex = 0;
+            int nextNewMLineIndex = RemoteDescription?.Media.Count ?? 0;
             foreach (var mediaStream in mediaStreamList)
             {
                 int mindex = 0;
@@ -1192,9 +1255,14 @@ namespace SIPSorcery.Net
 
                 if (mindex == SDP.MEDIA_INDEX_NOT_PRESENT)
                 {
-                    logger.LogWarning("Media announcement for {Kind} omitted due to no reciprocal remote announcement.", mediaStream.LocalTrack.Kind);
+                    // New media type added after the initial offer/answer — append it
+                    // after all existing m-lines so the ordering of previously negotiated
+                    // m-lines is preserved (RFC 3264 §8).
+                    mindex = nextNewMLineIndex;
+                    midTag = nextNewMLineIndex.ToString();
+                    nextNewMLineIndex++;
                 }
-                else
+
                 {
                     SDPMediaAnnouncement announcement = new SDPMediaAnnouncement(
                      mediaStream.LocalTrack.Kind,
@@ -1311,6 +1379,26 @@ namespace SIPSorcery.Net
 
             if (buffer?.Length > 0)
             {
+                // ICE source-address filter (issues #1559, #1731). Non-STUN packets are only
+                // forwarded to DTLS / RTP if their source matches one of the known remote ICE
+                // candidates (the remote SDP candidates plus peer-reflexive candidates discovered
+                // via authenticated STUN). This blocks an off-path attacker who guesses the local
+                // port from flooding DTLS ClientHello packets to interfere with a genuine handshake,
+                // while still accepting media that legitimately arrives from a valid-but-not-yet-
+                // nominated pair or an asymmetric path during ICE negotiation. STUN packets are
+                // filtered out earlier in the RTP channel and aren't subject to this check (consent
+                // freshness / ICE restart / new pair nomination still happen via the STUN path).
+                if (!(_rtpIceChannel?.IsKnownRemoteEndPoint(remoteEP) ?? false))
+                {
+                    if (logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
+                    {
+                        logger.LogDebug(
+                            "Dropped {ByteCount} byte non-STUN packet from {RemoteEndPoint}; source does not match any known ICE remote candidate (issues #1559, #1731).",
+                            buffer.Length, remoteEP);
+                    }
+                    return;
+                }
+
                 try
                 {
                     if (buffer?.Length > RTPHeader.MIN_HEADER_LEN && buffer[0] >= 128 && buffer[0] <= 191)
@@ -1334,6 +1422,37 @@ namespace SIPSorcery.Net
                 catch (Exception excp)
                 {
                     logger.LogError(excp, "Exception RTCPeerConnection.OnRTPDataReceived {ErrorMessage}", excp.Message);
+                }
+            }
+        }
+
+
+        private Func<IPEndPoint, IPEndPoint> _remoteEndpointTranslator;
+
+        /// <summary>
+        /// Optional hook to normalize the source endpoint of received traffic before it's
+        /// compared against ICE candidates and the nominated pair. Used to reconcile the
+        /// address an in-process TURN relay socket uses when sending to a local destination
+        /// (a local interface IP) with the advertised relay address (typically a public IP
+        /// in <c>XOR-RELAYED-ADDRESS</c>).
+        ///
+        /// The delegate receives the observed source endpoint and returns either a
+        /// translated endpoint (when it recognizes the source as a known relay socket)
+        /// or <c>null</c> / the input unchanged when no translation applies.
+        ///
+        /// Setting this property also propagates the value to the underlying
+        /// <see cref="RtpIceChannel"/> so peer-reflexive candidate creation honours the
+        /// same mapping. When unset, behaviour is identical to prior versions.
+        /// </summary>
+        public Func<IPEndPoint, IPEndPoint> RemoteEndpointTranslator
+        {
+            get => _remoteEndpointTranslator;
+            set
+            {
+                _remoteEndpointTranslator = value;
+                if (_rtpIceChannel != null)
+                {
+                    _rtpIceChannel.RemoteEndpointTranslator = value;
                 }
             }
         }
@@ -1435,8 +1554,14 @@ namespace SIPSorcery.Net
             }
             return Task.Run(async () =>
             {
-                //Call Renegotiation Delayed
-                await Task.Delay(RENEGOTIATION_CALL_DELAY, token);
+                try
+                {
+                    //Call Renegotiation Delayed
+                    await Task.Delay(RENEGOTIATION_CALL_DELAY, token);
+                }
+                catch (TaskCanceledException)
+                {
+                }
 
                 //Prevent continue with cancellation requested
                 if (token.IsCancellationRequested)
@@ -1468,6 +1593,7 @@ namespace SIPSorcery.Net
                         _cancellationSource.Cancel();
                     }
 
+                    _cancellationSource.Dispose();
                     _cancellationSource = null;
                 }
             }
@@ -1750,12 +1876,13 @@ namespace SIPSorcery.Net
             }
             else
             {
-                logger.LogDebug($"RTCPeerConnection DTLS handshake result {handshakeResult}, is handshake complete {dtlsHandle.IsHandshakeComplete()}.");
+                logger.LogDebug("RTCPeerConnection DTLS handshake result {HandshakeResult}, is handshake complete {IsHandshakeComplete}.",
+                    handshakeResult, dtlsHandle.IsHandshakeComplete());
 
                 var expectedFp = RemotePeerDtlsFingerprint;
                 var remoteFingerprint = DtlsUtils.Fingerprint(expectedFp.algorithm, dtlsHandle.GetRemoteCertificate().GetCertificateAt(0));
 
-                if (remoteFingerprint.value?.ToUpper() != expectedFp.value?.ToUpper())
+                if (!string.Equals(remoteFingerprint.value, expectedFp.value, StringComparison.OrdinalIgnoreCase))
                 {
                     logger.LogWarning("RTCPeerConnection remote certificate fingerprint mismatch, expected {ExpectedFingerprint}, actual {RemoteFingerprint}.", expectedFp, remoteFingerprint);
                     Close("dtls fingerprint mismatch");
@@ -1788,10 +1915,24 @@ namespace SIPSorcery.Net
         {
             if (alertType == TlsAlertTypesEnum.CloseNotify)
             {
-                logger.LogDebug("SCTP closing transport as a result of DTLS close notification.");
+                logger.LogDebug("Closing peer connection as a result of DTLS close notification.");
 
-                // No point keeping the SCTP association open if there is no DTLS transport available.
-                sctp?.Close();
+                // A DTLS close_notify from the remote peer means the secure
+                // channel is gone -- the entire peer connection is no longer
+                // usable. Per the WebRTC spec the RTCDtlsTransport state moves
+                // to "closed" which propagates to the RTCPeerConnection.
+                // libwebrtc, Firefox and pion all close the whole peer
+                // connection at this point.
+                //
+                // Without this Close() call the SCTP association alone is
+                // closed but the underlying RTP/UDP socket keeps running and
+                // continues to send periodic STUN consent freshness checks +
+                // RTP/RTCP packets at the now-gone remote port. The remote
+                // OS responds with ICMP "port unreachable" for each one,
+                // which surfaces as a tight loop of
+                //   SocketException UdpReceiver.EndReceiveFrom (ConnectionReset)
+                // warnings until the application shuts itself down.
+                Close("Remote DTLS close notification received");
             }
             else
             {

@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -802,7 +803,7 @@ namespace SIPSorcery.SIP
         /// <param name="sendFromSIPEndPoint">The IP end point the request or response is being sent from.</param>
         /// <param name="header">The SIP header object to apply the adjustments to. The header object will be updated
         /// in place with any header adjustments.</param>
-        private SIPHeader AdjustHeadersForEndPoint(SIPEndPoint sendFromSIPEndPoint, SIPHeader header)
+        internal SIPHeader AdjustHeadersForEndPoint(SIPEndPoint sendFromSIPEndPoint, SIPHeader header)
         {
             IPEndPoint sendFromEndPoint = sendFromSIPEndPoint.GetIPEndPoint();
 
@@ -832,8 +833,11 @@ namespace SIPSorcery.SIP
             }
 
             // Contact header.
-            if (header.Contact != null && header.Contact.Count == 1)
+            if (header is { Contact: { Count: 1 } })
             {
+                Debug.Assert(header.Contact.Count == 1);
+                var contactHeader = header.Contact[0];
+
                 if (!string.IsNullOrEmpty(ContactHost))
                 {
                     // A custom ContactHost will always take precedence.
@@ -841,27 +845,34 @@ namespace SIPSorcery.SIP
                     if (IPAddress.TryParse(ContactHost, out _))
                     {
                         // If the custom host is an IP address include the port number that's being used for the send.
-                        copy.Contact.Single().ContactURI.Host = ContactHost + ":" + sendFromEndPoint.Port.ToString();
+                        Debug.Assert(copy.Contact.Count == 1);
+                        copy.Contact[0].ContactURI.Host = $"{ContactHost}:{sendFromEndPoint.Port.ToString()}";
                     }
                     else
                     {
-                        copy.Contact.Single().ContactURI.Host = ContactHost;
+                        Debug.Assert(copy.Contact.Count == 1);
+                        copy.Contact[0].ContactURI.Host = ContactHost;
                     }
                 }
-                else if (header.Contact.Single().ContactURI.Host.StartsWith(IPAddress.Any.ToString()) ||
-                    header.Contact.Single().ContactURI.Host.StartsWith(IPAddress.IPv6Any.ToString()))
+                else
                 {
-                    copy = copy ?? header.Copy();
-                    copy.Contact.Single().ContactURI.Host = sendFromEndPoint.ToString();
+                    if (contactHeader.ContactURI.Host.StartsWith(IPAddress.Any.ToString()) ||
+                        contactHeader.ContactURI.Host.StartsWith(IPAddress.IPv6Any.ToString()))
+                    {
+                        copy = copy ?? header.Copy();
+                        Debug.Assert(copy.Contact.Count == 1);
+                        copy.Contact[0].ContactURI.Host = sendFromEndPoint.ToString();
+                    }
                 }
 
-                if (header.Contact.Single().ContactURI.Scheme == SIPSchemesEnum.sip &&
+                if (contactHeader.ContactURI.Scheme == SIPSchemesEnum.sip &&
                     sendFromSIPEndPoint.Protocol != SIPProtocolsEnum.udp &&
                     header.CSeqMethod != SIPMethodsEnum.REGISTER)
                 {
                     // REGISTER requests need the option to overrule the scheme if the caller so chooses.
                     copy = copy ?? header.Copy();
-                    copy.Contact.Single().ContactURI.Protocol = sendFromSIPEndPoint.Protocol;
+                    Debug.Assert(copy.Contact.Count == 1);
+                    copy.Contact[0].ContactURI.Protocol = sendFromSIPEndPoint.Protocol;
                 }
             }
 
@@ -934,8 +945,8 @@ namespace SIPSorcery.SIP
                         // Treat all messages that don't match STUN requests as SIP.
                         if (buffer.Length > SIPConstants.SIP_MAXIMUM_RECEIVE_LENGTH)
                         {
-                            string rawErrorMessage = m_sipEncoding.GetString(buffer, 0, 1024) + "\r\n..truncated";
-                            SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, "SIP message too large, " + buffer.Length + " bytes, maximum allowed is " + SIPConstants.SIP_MAXIMUM_RECEIVE_LENGTH + " bytes.", SIPValidationFieldsEnum.Request, rawErrorMessage);
+                            string rawErrorMessage = $"{m_sipEncoding.GetString(buffer, 0, 1024)}\r\n..truncated";
+                            SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, $"SIP message too large, {buffer.Length} bytes, maximum allowed is {SIPConstants.SIP_MAXIMUM_RECEIVE_LENGTH} bytes.", SIPValidationFieldsEnum.Request, rawErrorMessage);
                             SIPResponse tooLargeResponse = SIPResponse.GetResponse(localEndPoint, remoteEndPoint, SIPResponseStatusCodesEnum.MessageTooLarge, null);
                             return SendResponseAsync(tooLargeResponse);
                         }
@@ -1026,7 +1037,7 @@ namespace SIPSorcery.SIP
                                                 }
                                                 else
                                                 {
-                                                    SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, "ACK received on " + requestTransaction.TransactionState + " transaction, ignoring.", SIPValidationFieldsEnum.Request, null);
+                                                    SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, $"ACK received on {requestTransaction.TransactionState} transaction, ignoring.", SIPValidationFieldsEnum.Request, null);
                                                 }
                                             }
                                             else if (sipRequest.Method == SIPMethodsEnum.PRACK)
@@ -1121,7 +1132,7 @@ namespace SIPSorcery.SIP
             catch (Exception excp)
             {
                 logger.LogError(excp, "Exception SIPMessageReceived. {ErrorMessage}", excp.Message);
-                SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, "Exception SIPTransport. " + excp.Message, SIPValidationFieldsEnum.Unknown, rawSIPMessage);
+                SIPBadRequestInTraceEvent?.Invoke(localEndPoint, remoteEndPoint, $"Exception SIPTransport. {excp.Message}", SIPValidationFieldsEnum.Unknown, rawSIPMessage);
                 return Task.FromResult(SocketError.Fault);
             }
         }

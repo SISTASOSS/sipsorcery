@@ -96,12 +96,19 @@ namespace SIPSorcery.Net
             if (buffer != null && buffer.Length > 0 && buffer.Length >= bufferLength)
             {
                 STUNMessage stunMessage = new STUNMessage();
-                stunMessage._receivedBuffer = buffer.Take(bufferLength).ToArray();
+                stunMessage._receivedBuffer = buffer.AsSpan(0, bufferLength).ToArray();
                 stunMessage.Header = STUNHeader.ParseSTUNHeader(buffer);
 
                 if (stunMessage.Header.MessageLength > 0)
                 {
-                    stunMessage.Attributes = STUNAttribute.ParseMessageAttributes(buffer, STUNHeader.STUN_HEADER_LENGTH, bufferLength, stunMessage.Header);
+                    // The header claims there are attributes, so attempt to parse them. ParseMessageAttributes
+                    // returns null (rather than an empty list) when the buffer is too short or malformed to
+                    // contain any attributes. The "?? stunMessage.Attributes" guards against that null: the
+                    // Attributes field is initialised to an empty list when the STUNMessage is constructed, so
+                    // on a null result we fall back to that empty list rather than overwriting it with null.
+                    // This keeps Attributes non-null so the "stunMessage.Attributes.Count" access below (and
+                    // any caller that enumerates Attributes) cannot throw a NullReferenceException.
+                    stunMessage.Attributes = STUNAttribute.ParseMessageAttributes(buffer, STUNHeader.STUN_HEADER_LENGTH, bufferLength, stunMessage.Header) ?? stunMessage.Attributes;
                 }
 
                 if (stunMessage.Attributes.Count > 0 && stunMessage.Attributes.Last().AttributeType == STUNAttributeTypesEnum.FingerPrint)
@@ -109,7 +116,7 @@ namespace SIPSorcery.Net
                     // Check fingerprint.
                     var fingerprintAttribute = stunMessage.Attributes.Last();
 
-                    var input = buffer.Take(bufferLength - STUNAttribute.STUNATTRIBUTE_HEADER_LENGTH - FINGERPRINT_ATTRIBUTE_CRC32_LENGTH).ToArray();
+                    var input = buffer.AsSpan(0, bufferLength - STUNAttribute.STUNATTRIBUTE_HEADER_LENGTH - FINGERPRINT_ATTRIBUTE_CRC32_LENGTH).ToArray();
 
                     uint crc = Crc32.Compute(input) ^ FINGERPRINT_XOR;
                     var fingerPrint = new byte[4];
@@ -198,16 +205,33 @@ namespace SIPSorcery.Net
             return buffer;
         }
 
-        public new string ToString()
+        public override string ToString()
         {
-            string messageDescr = "STUN Message: " + Header.MessageType.ToString() + ", length=" + Header.MessageLength;
+            string messageDescr = $"STUN Message: {Header.MessageType.ToString()}, length={Header.MessageLength}";
 
             foreach (STUNAttribute attribute in Attributes)
             {
-                messageDescr += "\n " + attribute.ToString();
+                messageDescr += $"\n {attribute.ToString()}";
             }
 
             return messageDescr;
+        }
+
+        /// <summary>
+        /// Returns the first attribute of the requested type, or <c>null</c> if none is
+        /// present. Plain <c>foreach</c> rather than LINQ so this stays cheap on the hot
+        /// path — STUN messages routinely carry only a handful of attributes.
+        /// </summary>
+        public STUNAttribute GetFirstAttribute(STUNAttributeTypesEnum attributeType)
+        {
+            foreach (var attribute in Attributes)
+            {
+                if (attribute.AttributeType == attributeType)
+                {
+                    return attribute;
+                }
+            }
+            return null;
         }
 
         /// <summary>

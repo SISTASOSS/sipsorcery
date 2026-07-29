@@ -1,4 +1,4 @@
-﻿//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 // Filename: SIPUserAgent.cs
 //
 // Description: A "full" SIP user agent that encompasses both client and server 
@@ -1098,9 +1098,12 @@ namespace SIPSorcery.SIP.App
                     {
                         bool streamAdded = false;
 
-                        // Process both video and text streams
-                        HandleStreamChange(SDPMediaTypesEnum.video, offer, ref streamAdded);
-                        HandleStreamChange(SDPMediaTypesEnum.text, offer, ref streamAdded);
+                        // Process both video and text streams if offer exists
+                        if (offer != null)
+                        {
+                            HandleStreamChange(SDPMediaTypesEnum.video, offer, ref streamAdded);
+                            HandleStreamChange(SDPMediaTypesEnum.text, offer, ref streamAdded);
+                        }
 
                         // TODO: We should accept an empty re-INVITE body and send a new offer in the response. The remote peer can then send
                         // back the SDP answer in the ACK.
@@ -1400,7 +1403,7 @@ namespace SIPSorcery.SIP.App
                 reinviteRequest.Header.UserAgent = SIPConstants.SipUserAgentVersionString;
                 reinviteRequest.Header.ContentType = m_sdpContentType;
                 reinviteRequest.Body = sdp.ToString();
-                reinviteRequest.Header.Supported = SIPExtensionHeaders.REPLACES + ", " + SIPExtensionHeaders.NO_REFER_SUB + ", " + SIPExtensionHeaders.PRACK;
+                reinviteRequest.Header.Supported = $"{SIPExtensionHeaders.REPLACES}, {SIPExtensionHeaders.NO_REFER_SUB}, {SIPExtensionHeaders.PRACK}";
 
                 if (m_uac != null)
                 {
